@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Whack a Logan: Arcade Edition</title>
+    <title>Whack-A-Freddie: Arcade Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
     <style>
@@ -30,6 +30,248 @@
 <body>
     <div id="game-container"></div>
     <script>
+        /**
+         * Sound Service for Whack-A-Freddie
+         * Synthesizes arcade-style sound effects using the Web Audio API.
+         */
+        class SoundService {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            createGain(start, duration) {
+                if (!this.ctx) return null;
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(start, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                gain.connect(this.ctx.destination);
+                return gain;
+            }
+
+            playHitBoing(state) {
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                gain.connect(this.ctx.destination);
+
+                let baseFreq = 200;
+                let sweepMult = 2.5;
+                
+                if (state === 'shocked') {
+                    baseFreq = 300;
+                    sweepMult = 3.0;
+                    osc.type = 'triangle';
+                } else if (state === 'annoyed') {
+                    baseFreq = 450;
+                    sweepMult = 2.0;
+                    osc.type = 'square';
+                } else {
+                    osc.type = 'sine';
+                }
+
+                osc.frequency.setValueAtTime(baseFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(baseFreq * sweepMult, now + 0.05);
+                osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.2, now + 0.2);
+                
+                osc.connect(gain);
+                osc.start();
+                osc.stop(now + 0.2);
+            }
+
+            playDecoyBoing() {
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                gain.connect(this.ctx.destination);
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(60, now + 0.2);
+                
+                osc.connect(gain);
+                osc.start();
+                osc.stop(now + 0.3);
+            }
+
+            playMiss() {
+                this.init();
+                if (!this.ctx) return;
+
+                const bufferSize = this.ctx.sampleRate * 0.1;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1000, this.ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.1);
+
+                const gain = this.createGain(0.2, 0.1);
+                if (!gain) return;
+
+                noise.connect(filter);
+                filter.connect(gain);
+                noise.start();
+            }
+
+            playSpawn() {
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.createGain(0.3, 0.05);
+                if (!gain) return;
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, this.ctx.currentTime);
+                
+                osc.connect(gain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+            }
+
+            playTick() {
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.createGain(0.2, 0.05);
+                if (!gain) return;
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(60, this.ctx.currentTime);
+                
+                osc.connect(gain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+            }
+
+            playCombo(count) {
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.createGain(0.3, 0.15);
+                if (!gain) return;
+
+                const baseFreq = 440;
+                const freq = baseFreq * Math.pow(1.05946, count % 12);
+                
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(freq * 1.2, this.ctx.currentTime + 0.1);
+                
+                osc.connect(gain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playJackpot() {
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                [0, 0.05, 0.1, 0.15].forEach((delay, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.2, now + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + delay + 0.2);
+                    gain.connect(this.ctx.destination);
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(1000 + (i * 200), now + delay);
+                    
+                    osc.connect(gain);
+                    osc.start(now + delay);
+                    osc.stop(now + delay + 0.2);
+                });
+            }
+
+            playGameOver() {
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.createGain(0.5, 0.5);
+                if (!gain) return;
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + 0.5);
+                
+                osc.connect(gain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.5);
+            }
+
+            playClick() {
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.createGain(0.2, 0.02);
+                if (!gain) return;
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1500, this.ctx.currentTime);
+                
+                osc.connect(gain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.02);
+            }
+
+            playStart() {
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const freqs = [440, 554.37, 659.25, 880];
+                freqs.forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.2, now + (i * 0.05));
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.05) + 0.3);
+                    gain.connect(this.ctx.destination);
+
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(f, now + (i * 0.05));
+                    
+                    osc.connect(gain);
+                    osc.start(now + (i * 0.05));
+                    osc.stop(now + (i * 0.05) + 0.3);
+                });
+            }
+        }
+
+        const sounds = new SoundService();
+
         const CONFIG = {
             width: 1080,
             height: 1920,
@@ -51,6 +293,131 @@
             UI: 10
         };
 
+        // --- TITLE SCENE ---
+        class TitleScene extends Phaser.Scene {
+            constructor() {
+                super('TitleScene');
+            }
+
+            preload() {
+                const graphics = this.add.graphics();
+                graphics.fillStyle(0xffffff, 1);
+                graphics.fillCircle(4, 4, 4);
+                graphics.generateTexture('star', 8, 8);
+                graphics.destroy();
+
+                const planetGraphics = this.add.graphics();
+                planetGraphics.fillGradientStyle(0xff5500, 0xffaa00, 0xaa4400, 0x882200, 1);
+                planetGraphics.fillCircle(32, 32, 32);
+                planetGraphics.generateTexture('planet', 64, 64);
+                planetGraphics.destroy();
+            }
+
+            create() {
+                const { width, height } = this.cameras.main;
+
+                const bg = this.add.graphics();
+                bg.fillGradientStyle(0x1a0a33, 0x1a0a33, 0x0a0a2a, 0x05051a, 1);
+                bg.fillRect(0, 0, width, height);
+
+                for (let i = 0; i < 150; i++) {
+                    const x = Phaser.Math.Between(0, width);
+                    const y = Phaser.Math.Between(0, height);
+                    const star = this.add.image(x, y, 'star');
+                    star.setAlpha(Phaser.Math.FloatBetween(0.1, 0.5));
+                    star.setScale(Phaser.Math.FloatBetween(0.2, 0.8));
+                    this.tweens.add({
+                        targets: star,
+                        alpha: 0.8,
+                        duration: Phaser.Math.Between(1000, 3000),
+                        yoyo: true,
+                        repeat: -1,
+                        ease: 'Sine.easeInOut'
+                    });
+                }
+
+                for (let i = 0; i < 5; i++) {
+                    const x = Phaser.Math.Between(100, width - 100);
+                    const y = Phaser.Math.Between(100, height - 100);
+                    const planet = this.add.image(x, y, 'planet');
+                    planet.setAlpha(0.6);
+                    planet.setScale(Phaser.Math.FloatBetween(0.5, 1.5));
+                    planet.setTint(Phaser.Math.Between(0x888888, 0xffffff));
+                    this.tweens.add({
+                        targets: planet,
+                        y: y + 50,
+                        x: x + 20,
+                        duration: Phaser.Math.Between(5000, 10000),
+                        yoyo: true,
+                        repeat: -1,
+                        ease: 'Sine.easeInOut'
+                    });
+                }
+
+                const title = this.add.text(width / 2, height * 0.3, 'WHACK-A\nFREDDIE', {
+                    fontFamily: 'Bungee, cursive',
+                    fontSize: '160px',
+                    color: '#ffffff',
+                    stroke: '#0a0a2a',
+                    strokeThickness: 20,
+                    align: 'center',
+                    shadow: { offsetX: 10, offsetY: 10, color: '#000000', blur: 15, stroke: true, fill: true }
+                }).setOrigin(0.5);
+
+                const highScore = localStorage.getItem('freddie_high_score_arcade') || '0';
+                this.add.text(width / 2, height * 0.5, `BEST: ${highScore}`, {
+                    fontFamily: 'Roboto Mono, monospace',
+                    fontSize: '50px',
+                    color: '#ffcc00',
+                    stroke: '#000',
+                    strokeThickness: 5
+                }).setOrigin(0.5);
+
+                const startBtn = this.add.container(width / 2, height * 0.65);
+                const btnGlow = this.add.graphics();
+                btnGlow.fillStyle(0x00ffcc, 0.3);
+                btnGlow.fillRoundedRect(-320, -100, 640, 200, 40);
+                const btnBg = this.add.rectangle(0, 0, 600, 160, 0x00ffcc).setInteractive({ useHandCursor: true });
+                const btnText = this.add.text(0, 0, 'START GAME', { 
+                    fontFamily: 'Bungee, cursive', 
+                    fontSize: '70px', 
+                    color: '#0a0a2a' 
+                }).setOrigin(0.5);
+                startBtn.add([btnGlow, btnBg, btnText]);
+
+                this.tweens.add({
+                    targets: btnGlow,
+                    alpha: 0.6,
+                    scale: 1.05,
+                    duration: 1000,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+
+                btnBg.on('pointerdown', () => {
+                    sounds.playStart();
+                    this.tweens.add({
+                        targets: startBtn,
+                        scale: 0.9,
+                        duration: 100,
+                        yoyo: true,
+                        onComplete: () => this.scene.start('MainScene')
+                    });
+                });
+
+                this.tweens.add({
+                    targets: title,
+                    y: title.y + 20,
+                    duration: 2500,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+            }
+        }
+
+        // --- MAIN GAMEPLAY SCENE ---
         class MainScene extends Phaser.Scene {
             constructor() {
                 super('MainScene');
@@ -61,18 +428,6 @@
                 this.load.image('shocked', 'shocked.png');
                 this.load.image('annoyed', 'annoyed.png');
                 this.load.image('sleeping', 'sleeping.png');
-                this.load.image('golden', 'golden.png');
-
-                // Generate a light dot-pattern texture
-                const dotSize = 4;
-                const spacing = 64;
-                const canvas = this.textures.createCanvas('pattern', spacing, spacing);
-                const ctx = canvas.getContext();
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-                ctx.beginPath();
-                ctx.arc(spacing / 2, spacing / 2, dotSize / 2, 0, Math.PI * 2);
-                ctx.fill();
-                canvas.refresh();
             }
 
             init() {
@@ -89,42 +444,59 @@
             create() {
                 const { width, height } = this.cameras.main;
 
-                // Background Gradient
                 const bg = this.add.graphics();
-                bg.fillGradientStyle(0x0f0c29, 0x0f0c29, 0x302b63, 0x24243e, 1);
+                bg.fillGradientStyle(0x1a0a33, 0x1a0a33, 0x0a0a2a, 0x05051a, 1);
                 bg.fillRect(0, 0, width, height);
                 bg.setDepth(DEPTH.BACKGROUND);
 
-                // Light Textured Pattern
-                const pattern = this.add.tileSprite(0, 0, width, height, 'pattern');
-                pattern.setOrigin(0, 0);
-                pattern.setAlpha(0.5);
-                pattern.setDepth(DEPTH.BACKGROUND + 1);
+                for (let i = 0; i < 150; i++) {
+                    const x = Phaser.Math.Between(0, width);
+                    const y = Phaser.Math.Between(0, height);
+                    const star = this.add.image(x, y, 'star');
+                    star.setAlpha(Phaser.Math.FloatBetween(0.1, 0.5));
+                    star.setScale(Phaser.Math.FloatBetween(0.2, 0.8));
+                    star.setDepth(DEPTH.BACKGROUND + 1);
+                    this.tweens.add({
+                        targets: star,
+                        alpha: 0.8,
+                        duration: Phaser.Math.Between(1000, 3000),
+                        yoyo: true,
+                        repeat: -1,
+                        ease: 'Sine.easeInOut'
+                    });
+                }
 
-                // Vignette Overlay
+                for (let i = 0; i < 5; i++) {
+                    const x = Phaser.Math.Between(100, width - 100);
+                    const y = Phaser.Math.Between(100, height - 100);
+                    const planet = this.add.image(x, y, 'planet');
+                    planet.setAlpha(0.4);
+                    planet.setScale(Phaser.Math.FloatBetween(0.5, 1.5));
+                    planet.setTint(Phaser.Math.Between(0x888888, 0xffffff));
+                    planet.setDepth(DEPTH.BACKGROUND + 2);
+                    this.tweens.add({
+                        targets: planet,
+                        y: y + 50,
+                        x: x + 20,
+                        duration: Phaser.Math.Between(5000, 10000),
+                        yoyo: true,
+                        repeat: -1,
+                        ease: 'Sine.easeInOut'
+                    });
+                }
+
                 this.createVignette();
-
-                // Animated Particles in background
                 this.createBackgroundParticles();
-
-                // UI Header
                 this.createUI();
-
-                // Grid Setup
                 this.createGrid();
-
-                // Intro Sequence
                 this.showIntro();
             }
 
             createVignette() {
                 const { width, height } = this.cameras.main;
                 const vignette = this.add.graphics();
-                
-                // Use a large rectangle with a radial-like gradient feel
                 vignette.fillStyle(0x000000, 1);
                 vignette.fillRect(0, 0, width, height);
-                
                 vignette.setAlpha(0.2);
                 vignette.setBlendMode(Phaser.BlendModes.MULTIPLY);
                 vignette.setDepth(DEPTH.VIGNETTE);
@@ -134,7 +506,7 @@
                 const { width, height } = this.cameras.main;
                 const readyText = this.add.text(width / 2, height / 2, 'READY?', { 
                     fontSize: '200px', 
-                    fill: '#ffff00', 
+                    color: '#ffff00', 
                     stroke: '#000', 
                     strokeThickness: 20 
                 }).setOrigin(0.5).setScale(0);
@@ -147,7 +519,7 @@
                     onComplete: () => {
                         this.time.delayedCall(500, () => {
                             readyText.setText('GO!');
-                            readyText.setFill('#00ff00');
+                            readyText.setColor('#00ff00');
                             this.tweens.add({
                                 targets: readyText,
                                 scale: 2,
@@ -165,18 +537,13 @@
             }
 
             startGame() {
-                // Game Timer
                 this.time.addEvent({
                     delay: 1000,
                     callback: this.updateTimer,
                     callbackScope: this,
                     loop: true
                 });
-
-                // Spawn Loop
                 this.scheduleNextSpawn();
-
-                // Input for general background miss
                 this.input.on('pointerdown', (pointer, currentlyOver) => {
                     if (currentlyOver.length === 0) {
                         this.handleMiss(pointer.x, pointer.y);
@@ -185,7 +552,6 @@
             }
 
             createBackgroundParticles() {
-                // Create a simple particle texture
                 const graphics = this.add.graphics();
                 graphics.fillStyle(0xffffff, 1);
                 graphics.fillCircle(10, 10, 10);
@@ -209,48 +575,33 @@
 
             createUI() {
                 const { width } = this.cameras.main;
-                
-                // Game Title
-                this.titleText = this.add.text(width / 2, 350, 'WHACK A LOGAN', { 
-                    fontFamily: 'Bungee', 
-                    fontSize: '120px', 
-                    fill: '#ffffff',
+                this.titleText = this.add.text(width / 2, 350, 'WHACK-A-FREDDIE', { 
+                    fontFamily: 'Bungee, cursive', 
+                    fontSize: '110px', 
+                    color: '#ffffff',
                     stroke: '#000',
                     strokeThickness: 12,
                     align: 'center'
                 }).setOrigin(0.5);
-                
-                const maxTitleWidth = width * 0.95;
-                if (this.titleText.width > maxTitleWidth) {
-                    this.titleText.setScale(maxTitleWidth / this.titleText.width);
-                }
-
-                // Score Panel
                 this.scoreText = this.add.text(width / 2, 530, '00000', { 
-                    fontFamily: 'Roboto Mono', 
+                    fontFamily: 'Roboto Mono, monospace', 
                     fontSize: '140px', 
-                    fill: '#00ffcc',
+                    color: '#00ffcc',
                     stroke: '#000',
                     strokeThickness: 10
                 }).setOrigin(0.5);
-                
-                this.add.text(width / 2, 440, 'SCORE', { fontSize: '40px', fill: '#ffffff' }).setOrigin(0.5);
-
-                // Timer
+                this.add.text(width / 2, 440, 'SCORE', { fontSize: '40px', color: '#ffffff' }).setOrigin(0.5);
                 this.timerText = this.add.text(width / 2, 670, '60', { 
                     fontSize: '100px', 
-                    fill: '#ff0055',
+                    color: '#ff0055',
                     stroke: '#000',
                     strokeThickness: 5
                 }).setOrigin(0.5);
-
-                // Combo & Multiplier
                 this.comboContainer = this.add.container(width / 2, 800);
-                this.comboText = this.add.text(0, 0, 'COMBO: 0', { fontSize: '60px', fill: '#ffcc00' }).setOrigin(0.5);
-                this.multiplierText = this.add.text(0, 80, 'x1', { fontSize: '80px', fill: '#00ff00', fontWeight: 'bold' }).setOrigin(0.5);
+                this.comboText = this.add.text(0, 0, 'COMBO: 0', { fontSize: '60px', color: '#ffcc00' }).setOrigin(0.5);
+                this.multiplierText = this.add.text(0, 80, 'x1', { fontSize: '80px', color: '#00ff00', fontWeight: 'bold' }).setOrigin(0.5);
                 this.comboContainer.add([this.comboText, this.multiplierText]);
                 this.comboContainer.setAlpha(0);
-                
                 this.titleText.setDepth(DEPTH.UI);
                 this.scoreText.setDepth(DEPTH.UI);
                 this.timerText.setDepth(DEPTH.UI);
@@ -262,36 +613,21 @@
                 const startX = width / 2 - 320;
                 const startY = height / 2 + 100;
                 const spacing = 320;
-
                 for (let row = 0; row < CONFIG.gridSize; row++) {
                     for (let col = 0; col < CONFIG.gridSize; col++) {
                         const x = startX + col * spacing;
                         const y = startY + row * spacing;
-                        
-                        // Outer Shadow
                         this.add.ellipse(x, y + 15, CONFIG.holeRadius * 2.1, CONFIG.holeRadius * 1.3, 0x000000, 0.4).setDepth(DEPTH.HOLES - 1);
-                        
-                        // Hole Base
                         const hole = this.add.graphics();
-                        
-                        // 3D Hole: Inner shadow
                         hole.fillStyle(0x0a0a0a, 1);
                         hole.fillEllipse(x, y, CONFIG.holeRadius * 2, CONFIG.holeRadius * 1.2);
-                        
-                        // 3D Hole: Rim highlight
                         hole.lineStyle(4, 0x666666, 0.8);
                         hole.strokeEllipse(x, y, CONFIG.holeRadius * 2, CONFIG.holeRadius * 1.2);
-                        
-                        // Subtle inner rim shadow
                         hole.lineStyle(8, 0x000000, 0.5);
                         hole.strokeEllipse(x, y + 5, CONFIG.holeRadius * 1.9, CONFIG.holeRadius * 1.1);
-
                         hole.setDepth(DEPTH.HOLES);
-                        
-                        // Interactive area
                         const hitArea = this.add.ellipse(x, y, CONFIG.holeRadius * 2, CONFIG.holeRadius * 1.2).setInteractive();
                         hitArea.on('pointerdown', () => this.handleMiss(x, y));
-
                         this.holes.push({ x, y, hitArea });
                     }
                 }
@@ -301,15 +637,12 @@
                 if (this.isGameOver) return;
                 this.timeLeft--;
                 this.timerText.setText(this.timeLeft.toString().padStart(2, '0'));
-                
                 if (this.timeLeft <= 10) {
-                    this.timerText.setFill('#ff0000');
+                    sounds.playTick();
+                    this.timerText.setColor('#ff0000');
                     this.tweens.add({ targets: this.timerText, scale: 1.2, duration: 200, yoyo: true });
                 }
-
-                if (this.timeLeft <= 0) {
-                    this.endGame();
-                }
+                if (this.timeLeft <= 0) this.endGame();
             }
 
             scheduleNextSpawn() {
@@ -320,50 +653,29 @@
 
             spawnNephew() {
                 if (this.isGameOver) return;
-                
-                // Cleanup previous if exists
-                if (this.activeNephew) {
-                    this.activeNephew.destroy();
-                }
-                if (this.activeSpotlight) {
-                    this.activeSpotlight.destroy();
-                }
-
+                if (this.activeNephew) this.activeNephew.destroy();
+                if (this.activeSpotlight) this.activeSpotlight.destroy();
                 const hole = Phaser.Utils.Array.GetRandom(this.holes);
                 const typeRoll = Math.random();
-                
-                let type = 'normal';
-                if (typeRoll < 0.10) type = 'golden';
-                else if (typeRoll < 0.25) type = 'decoy';
-
-                // Create Spotlight
+                let type = typeRoll < 0.15 ? 'decoy' : 'normal';
                 const spotlight = this.add.graphics();
                 spotlight.fillStyle(0x00ffcc, 1);
                 spotlight.fillCircle(hole.x, hole.y, CONFIG.holeRadius * 1.5);
                 spotlight.setAlpha(0);
                 spotlight.setBlendMode(Phaser.BlendModes.ADD);
                 spotlight.setDepth(DEPTH.SPOTLIGHT);
-                
-                this.tweens.add({
-                    targets: spotlight,
-                    alpha: 0.1,
-                    duration: 150
-                });
+                this.tweens.add({ targets: spotlight, alpha: 0.1, duration: 150 });
                 this.activeSpotlight = spotlight;
-
+                sounds.playSpawn();
                 const nephew = this.createNephewGraphic(hole.x, hole.y, type);
                 nephew.type = type;
                 nephew.setDepth(DEPTH.NEPHEW);
-                
                 nephew.setInteractive(new Phaser.Geom.Circle(0, 0, 100), Phaser.Geom.Circle.Contains);
                 nephew.on('pointerdown', (pointer, localX, localY, event) => {
                     event.stopPropagation();
                     this.handleHit(nephew, spotlight);
                 });
-
                 this.activeNephew = nephew;
-
-                // Auto-hide
                 this.time.delayedCall(CONFIG.displayDuration, () => {
                     if (this.activeNephew === nephew) {
                         this.tweens.add({
@@ -389,105 +701,56 @@
 
             createNephewGraphic(x, y, type) {
                 const container = this.add.container(x, y + 50);
-                
-                let textureKey = 'calm';
-                if (type === 'golden') {
-                    textureKey = 'golden';
-                } else if (type === 'decoy') {
-                    textureKey = 'sleeping';
-                } else {
-                    if (this.combo >= 6) {
-                        textureKey = 'annoyed';
-                    } else if (this.combo >= 3) {
-                        textureKey = 'shocked';
-                    } else {
-                        textureKey = 'calm';
-                    }
-                }
-
+                let textureKey = type === 'decoy' ? 'sleeping' : (this.combo >= 6 ? 'annoyed' : (this.combo >= 3 ? 'shocked' : 'calm'));
                 const img = this.add.image(0, 0, textureKey).setDisplaySize(220, 220);
                 container.add(img);
-
-                if (type === 'golden') {
-                    const glow = this.add.graphics();
-                    glow.lineStyle(8, 0xffffff, 0.8);
-                    glow.strokeCircle(0, 0, 110);
-                    container.add(glow);
-                }
-
-                if (type === 'decoy') {
-                    const zText = this.add.text(20, -80, 'Zzz', { fontSize: '40px', fill: '#fff' });
-                    container.add(zText);
-                }
-
-                this.tweens.add({
-                    targets: container,
-                    y: y - 80,
-                    duration: 150,
-                    ease: 'Back.easeOut'
-                });
-
+                this.tweens.add({ targets: container, y: y - 80, duration: 150, ease: 'Back.easeOut' });
                 return container;
             }
 
             handleHit(nephew, spotlight) {
                 if (this.isGameOver) return;
-
                 const type = nephew.type;
                 const x = nephew.x;
                 const y = nephew.y;
-                
                 nephew.destroy();
                 if (spotlight) {
-                    this.tweens.add({
-                        targets: spotlight,
-                        alpha: 0,
-                        duration: 100,
-                        onComplete: () => spotlight.destroy()
-                    });
+                    this.tweens.add({ targets: spotlight, alpha: 0, duration: 100, onComplete: () => spotlight.destroy() });
                 }
-                
                 this.activeNephew = null;
                 this.activeSpotlight = null;
-
                 this.cameras.main.shake(100, 0.01);
-
                 if (type === 'decoy') {
+                    sounds.playDecoyBoing();
                     this.score = Math.max(0, this.score - 1);
                     this.resetCombo();
                     this.showFloatingText(x, y, 'BAD! -1', '#ff0000');
                     this.createExplosion(x, y, 0xff0000);
                 } else {
+                    if (this.combo >= 5) {
+                        sounds.playJackpot();
+                    } else {
+                        const state = this.combo >= 6 ? 'annoyed' : (this.combo >= 3 ? 'shocked' : 'calm');
+                        sounds.playHitBoing(state);
+                    }
                     this.combo++;
                     this.updateMultiplier();
-                    
-                    let points = (type === 'golden') ? 5 : 1;
-                    const totalPoints = points * this.multiplier;
+                    const totalPoints = 1 * this.multiplier;
                     this.score += totalPoints;
-                    
-                    if (type === 'golden') {
-                        this.showFloatingText(x, y, 'PERFECT!', '#ffff00', 1.5);
-                    }
-                    this.showFloatingText(x, y, `+${totalPoints}`, (type === 'golden') ? '#ffff00' : '#00ffcc');
-                    this.createExplosion(x, y, (type === 'golden') ? 0xffff00 : 0x00ffcc);
-                    
+                    this.showFloatingText(x, y, `+${totalPoints}`, '#00ffcc');
+                    this.createExplosion(x, y, 0x00ffcc);
                     if (this.combo >= 3) {
                         this.comboContainer.setAlpha(1);
                         this.tweens.add({ targets: this.comboContainer, scale: 1.2, duration: 100, yoyo: true });
-                        
-                        if (this.combo >= 6) {
-                            this.multiplierText.setStroke('#ff6600', 10);
-                            this.cameras.main.shake(50, 0.005);
-                        }
                     }
                 }
-
                 this.updateUI();
                 this.scheduleNextSpawn();
             }
 
             handleMiss(x, y) {
                 if (this.isGameOver) return;
+                sounds.playMiss();
                 this.score = Math.max(0, this.score - 1);
                 this.resetCombo();
                 this.updateUI();
@@ -500,23 +763,18 @@
                     const angle = Phaser.Math.DegToRad(i * 30);
                     const dist = Phaser.Math.Between(50, 150);
                     const circle = this.add.circle(x, y, Phaser.Math.Between(5, 15), color);
-                    
                     this.tweens.add({
                         targets: circle,
                         x: x + Math.cos(angle) * dist,
                         y: y + Math.sin(angle) * dist,
-                        alpha: 0,
-                        scale: 0,
-                        duration: 400,
+                        alpha: 0, scale: 0, duration: 400,
                         onComplete: () => circle.destroy()
                     });
                 }
             }
 
             resetCombo() {
-                if (this.combo > 0) {
-                    this.tweens.add({ targets: this.comboContainer, alpha: 0, scale: 0.5, duration: 200 });
-                }
+                if (this.combo > 0) this.tweens.add({ targets: this.comboContainer, alpha: 0, scale: 0.5, duration: 200 });
                 this.combo = 0;
                 this.multiplier = 1;
                 this.updateUI();
@@ -532,46 +790,27 @@
                 this.scoreText.setText(this.score.toString().padStart(5, '0'));
                 this.comboText.setText(`COMBO: ${this.combo}`);
                 this.multiplierText.setText(`x${this.multiplier}`);
-                
-                if (this.multiplier > 1) {
-                    this.multiplierText.setFill(this.multiplier >= 3 ? '#ff00ff' : '#00ff00');
-                }
+                if (this.multiplier > 1) this.multiplierText.setColor(this.multiplier >= 3 ? '#ff00ff' : '#00ff00');
             }
 
             showFloatingText(x, y, text, color, scale = 1) {
-                const txt = this.add.text(x, y, text, { 
-                    fontSize: '80px', 
-                    fill: color, 
-                    fontWeight: 'bold',
-                    stroke: '#000',
-                    strokeThickness: 5
-                }).setOrigin(0.5).setScale(scale);
+                const txt = this.add.text(x, y, text, { fontSize: '80px', color: color, fontWeight: 'bold', stroke: '#000', strokeThickness: 5 }).setOrigin(0.5).setScale(scale);
                 txt.setDepth(DEPTH.UI + 1);
-                
-                this.tweens.add({
-                    targets: txt,
-                    y: y - 200,
-                    alpha: 0,
-                    scale: scale * 1.5,
-                    duration: 600,
-                    onComplete: () => txt.destroy()
-                });
+                this.tweens.add({ targets: txt, y: y - 200, alpha: 0, scale: scale * 1.5, duration: 600, onComplete: () => txt.destroy() });
             }
 
             endGame() {
                 this.isGameOver = true;
+                sounds.playGameOver();
                 if (this.activeNephew) this.activeNephew.destroy();
                 if (this.activeSpotlight) this.activeSpotlight.destroy();
-                
-                const highScore = parseInt(localStorage.getItem('nephew_high_score_arcade') || '0');
-                if (this.score > highScore) {
-                    localStorage.setItem('nephew_high_score_arcade', this.score.toString());
-                }
-
-                this.scene.start('GameOverScene', { score: this.score, highScore: Math.max(this.score, highScore) });
+                const highScore = localStorage.getItem('freddie_high_score_arcade') || '0';
+                if (this.score > parseInt(highScore)) localStorage.setItem('freddie_high_score_arcade', this.score.toString());
+                this.scene.start('GameOverScene', { score: this.score, highScore: Math.max(this.score, parseInt(highScore)) });
             }
         }
 
+        // --- GAME OVER SCENE ---
         class GameOverScene extends Phaser.Scene {
             constructor() {
                 super('GameOverScene');
@@ -580,34 +819,18 @@
             create(data) {
                 const { width, height } = this.cameras.main;
                 this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.9);
-
-                this.add.text(width / 2, height / 2 - 400, 'GAME OVER', { 
-                    fontSize: '140px', 
-                    fill: '#ff0055', 
-                    stroke: '#fff',
-                    strokeThickness: 10
-                }).setOrigin(0.5);
-                
-                this.add.text(width / 2, height / 2 - 150, `FINAL SCORE`, { fontSize: '50px', fill: '#aaa' }).setOrigin(0.5);
-                this.add.text(width / 2, height / 2 - 50, `${data.score}`, { fontSize: '120px', fill: '#00ffcc' }).setOrigin(0.5);
-                
-                this.add.text(width / 2, height / 2 + 100, `BEST: ${data.highScore}`, { fontSize: '60px', fill: '#ffcc00' }).setOrigin(0.5);
-
+                this.add.text(width / 2, height / 2 - 400, 'GAME OVER', { fontSize: '140px', color: '#ff0055', stroke: '#fff', strokeThickness: 10 }).setOrigin(0.5);
+                this.add.text(width / 2, height / 2 - 150, `FINAL SCORE`, { fontSize: '50px', color: '#aaa' }).setOrigin(0.5);
+                this.add.text(width / 2, height / 2 - 50, `${data.score}`, { fontSize: '120px', color: '#00ffcc' }).setOrigin(0.5);
+                this.add.text(width / 2, height / 2 + 100, `BEST: ${data.highScore}`, { fontSize: '60px', color: '#ffcc00' }).setOrigin(0.5);
                 const restartBtn = this.add.container(width / 2, height / 2 + 350);
                 const bg = this.add.rectangle(0, 0, 600, 150, 0x00ffcc).setInteractive();
-                const txt = this.add.text(0, 0, 'PLAY AGAIN', { fontSize: '60px', fill: '#000' }).setOrigin(0.5);
+                const txt = this.add.text(0, 0, 'PLAY AGAIN', { fontSize: '60px', color: '#000' }).setOrigin(0.5);
                 restartBtn.add([bg, txt]);
-
                 bg.on('pointerdown', () => {
-                    this.tweens.add({
-                        targets: restartBtn,
-                        scale: 0.9,
-                        duration: 50,
-                        yoyo: true,
-                        onComplete: () => this.scene.start('MainScene')
-                    });
+                    sounds.playClick();
+                    this.tweens.add({ targets: restartBtn, scale: 0.9, duration: 50, yoyo: true, onComplete: () => this.scene.start('MainScene') });
                 });
-
                 this.time.addEvent({
                     delay: 200,
                     callback: () => {
@@ -630,7 +853,7 @@
                 mode: Phaser.Scale.FIT,
                 autoCenter: Phaser.Scale.CENTER_BOTH
             },
-            scene: [MainScene, GameOverScene],
+            scene: [TitleScene, MainScene, GameOverScene],
             backgroundColor: '#0a0a0a'
         };
 
