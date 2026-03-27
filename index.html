@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Whack-A-Freddie: Arcade Edition</title>
+    <title>Whack-A-Freya</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
             padding: 0;
-            background-color: #0a0a0a;
+            background-color: #ffff00;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -23,15 +23,16 @@
             height: 100%;
             max-width: 100vw;
             max-height: 100vh;
-            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            box-shadow: 0 0 50px rgba(0,0,0,0.3);
         }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
+
     <script>
         /**
-         * Sound Service for Whack-A-Freddie
+         * Sound Service for Whack-A-Freya
          * Synthesizes arcade-style sound effects using the Web Audio API.
          */
         class SoundService {
@@ -173,6 +174,22 @@
                 osc.stop(this.ctx.currentTime + 0.05);
             }
 
+            playScore() {
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.createGain(0.3, 0.1);
+                if (!gain) return;
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+                
+                osc.connect(gain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+
             playCombo(count) {
                 this.init();
                 if (!this.ctx) return;
@@ -300,12 +317,14 @@
             }
 
             preload() {
+                // Generate a large bold pink polkadot texture
                 const graphics = this.add.graphics();
-                graphics.fillStyle(0xffffff, 1);
-                graphics.fillCircle(4, 4, 4);
-                graphics.generateTexture('star', 8, 8);
+                graphics.fillStyle(0xff0055, 1);
+                graphics.fillCircle(40, 40, 40);
+                graphics.generateTexture('polkadot', 80, 80);
                 graphics.destroy();
 
+                // Generate a planet texture
                 const planetGraphics = this.add.graphics();
                 planetGraphics.fillGradientStyle(0xff5500, 0xffaa00, 0xaa4400, 0x882200, 1);
                 planetGraphics.fillCircle(32, 32, 32);
@@ -316,26 +335,30 @@
             create() {
                 const { width, height } = this.cameras.main;
 
+                // Background Gradient: Bright Yellow
                 const bg = this.add.graphics();
-                bg.fillGradientStyle(0x1a0a33, 0x1a0a33, 0x0a0a2a, 0x05051a, 1);
+                bg.fillGradientStyle(0xffff00, 0xffff00, 0xffcc00, 0xffcc00, 1);
                 bg.fillRect(0, 0, width, height);
 
-                for (let i = 0; i < 150; i++) {
-                    const x = Phaser.Math.Between(0, width);
-                    const y = Phaser.Math.Between(0, height);
-                    const star = this.add.image(x, y, 'star');
-                    star.setAlpha(Phaser.Math.FloatBetween(0.1, 0.5));
-                    star.setScale(Phaser.Math.FloatBetween(0.2, 0.8));
+                // Bold Pink Polkadots (some partially off-screen)
+                for (let i = 0; i < 100; i++) {
+                    const x = Phaser.Math.Between(-50, width + 50);
+                    const y = Phaser.Math.Between(-50, height + 50);
+                    const dot = this.add.image(x, y, 'polkadot');
+                    dot.setAlpha(Phaser.Math.FloatBetween(0.15, 0.35));
+                    dot.setScale(Phaser.Math.FloatBetween(1.5, 3.0));
+                    
                     this.tweens.add({
-                        targets: star,
-                        alpha: 0.8,
-                        duration: Phaser.Math.Between(1000, 3000),
+                        targets: dot,
+                        scale: dot.scale * 0.8,
+                        duration: Phaser.Math.Between(1500, 4000),
                         yoyo: true,
                         repeat: -1,
                         ease: 'Sine.easeInOut'
                     });
                 }
 
+                // Floating Planets
                 for (let i = 0; i < 5; i++) {
                     const x = Phaser.Math.Between(100, width - 100);
                     const y = Phaser.Math.Between(100, height - 100);
@@ -343,6 +366,7 @@
                     planet.setAlpha(0.6);
                     planet.setScale(Phaser.Math.FloatBetween(0.5, 1.5));
                     planet.setTint(Phaser.Math.Between(0x888888, 0xffffff));
+
                     this.tweens.add({
                         targets: planet,
                         y: y + 50,
@@ -354,17 +378,19 @@
                     });
                 }
 
-                const title = this.add.text(width / 2, height * 0.3, 'WHACK-A\nFREDDIE', {
+                // Title Text
+                const title = this.add.text(width / 2, height * 0.3, 'WHACK-A\nFREYA', {
                     fontFamily: 'Bungee, cursive',
                     fontSize: '160px',
                     color: '#ffffff',
-                    stroke: '#0a0a2a',
+                    stroke: '#ff0055',
                     strokeThickness: 20,
                     align: 'center',
                     shadow: { offsetX: 10, offsetY: 10, color: '#000000', blur: 15, stroke: true, fill: true }
                 }).setOrigin(0.5);
 
-                const highScore = localStorage.getItem('freddie_high_score_arcade') || '0';
+                // High Score
+                const highScore = localStorage.getItem('freya_high_score_arcade') || '0';
                 this.add.text(width / 2, height * 0.5, `BEST: ${highScore}`, {
                     fontFamily: 'Roboto Mono, monospace',
                     fontSize: '50px',
@@ -373,16 +399,19 @@
                     strokeThickness: 5
                 }).setOrigin(0.5);
 
+                // Start Button
                 const startBtn = this.add.container(width / 2, height * 0.65);
                 const btnGlow = this.add.graphics();
                 btnGlow.fillStyle(0x00ffcc, 0.3);
                 btnGlow.fillRoundedRect(-320, -100, 640, 200, 40);
+                
                 const btnBg = this.add.rectangle(0, 0, 600, 160, 0x00ffcc).setInteractive({ useHandCursor: true });
                 const btnText = this.add.text(0, 0, 'START GAME', { 
                     fontFamily: 'Bungee, cursive', 
                     fontSize: '70px', 
                     color: '#0a0a2a' 
                 }).setOrigin(0.5);
+                
                 startBtn.add([btnGlow, btnBg, btnText]);
 
                 this.tweens.add({
@@ -424,10 +453,12 @@
             }
 
             preload() {
-                this.load.image('calm', 'calm.png');
-                this.load.image('shocked', 'shocked.png');
-                this.load.image('annoyed', 'annoyed.png');
-                this.load.image('sleeping', 'sleeping.png');
+                // Freya faces - Replace these URLs with local paths if you have images in the same folder
+                // e.g., this.load.image('calm', 'calm.png');
+                this.load.image('calm', 'https://picsum.photos/seed/freddie_calm/220/220');
+                this.load.image('shocked', 'https://picsum.photos/seed/freddie_shocked/220/220');
+                this.load.image('annoyed', 'https://picsum.photos/seed/freddie_annoyed/220/220');
+                this.load.image('sleeping', 'https://picsum.photos/seed/freddie_sleeping/220/220');
             }
 
             init() {
@@ -444,28 +475,32 @@
             create() {
                 const { width, height } = this.cameras.main;
 
+                // Background Gradient: Bright Yellow
                 const bg = this.add.graphics();
-                bg.fillGradientStyle(0x1a0a33, 0x1a0a33, 0x0a0a2a, 0x05051a, 1);
+                bg.fillGradientStyle(0xffff00, 0xffff00, 0xffcc00, 0xffcc00, 1);
                 bg.fillRect(0, 0, width, height);
                 bg.setDepth(DEPTH.BACKGROUND);
 
-                for (let i = 0; i < 150; i++) {
-                    const x = Phaser.Math.Between(0, width);
-                    const y = Phaser.Math.Between(0, height);
-                    const star = this.add.image(x, y, 'star');
-                    star.setAlpha(Phaser.Math.FloatBetween(0.1, 0.5));
-                    star.setScale(Phaser.Math.FloatBetween(0.2, 0.8));
-                    star.setDepth(DEPTH.BACKGROUND + 1);
+                // Bold Pink Polkadots
+                for (let i = 0; i < 100; i++) {
+                    const x = Phaser.Math.Between(-50, width + 50);
+                    const y = Phaser.Math.Between(-50, height + 50);
+                    const dot = this.add.image(x, y, 'polkadot');
+                    dot.setAlpha(Phaser.Math.FloatBetween(0.15, 0.35));
+                    dot.setScale(Phaser.Math.FloatBetween(1.5, 3.0));
+                    dot.setDepth(DEPTH.BACKGROUND + 1);
+                    
                     this.tweens.add({
-                        targets: star,
-                        alpha: 0.8,
-                        duration: Phaser.Math.Between(1000, 3000),
+                        targets: dot,
+                        scale: dot.scale * 0.8,
+                        duration: Phaser.Math.Between(1500, 4000),
                         yoyo: true,
                         repeat: -1,
                         ease: 'Sine.easeInOut'
                     });
                 }
 
+                // Floating Planets
                 for (let i = 0; i < 5; i++) {
                     const x = Phaser.Math.Between(100, width - 100);
                     const y = Phaser.Math.Between(100, height - 100);
@@ -474,6 +509,7 @@
                     planet.setScale(Phaser.Math.FloatBetween(0.5, 1.5));
                     planet.setTint(Phaser.Math.Between(0x888888, 0xffffff));
                     planet.setDepth(DEPTH.BACKGROUND + 2);
+
                     this.tweens.add({
                         targets: planet,
                         y: y + 50,
@@ -575,14 +611,16 @@
 
             createUI() {
                 const { width } = this.cameras.main;
-                this.titleText = this.add.text(width / 2, 350, 'WHACK-A-FREDDIE', { 
+                
+                this.titleText = this.add.text(width / 2, 350, 'WHACK-A-FREYA', { 
                     fontFamily: 'Bungee, cursive', 
                     fontSize: '110px', 
                     color: '#ffffff',
-                    stroke: '#000',
+                    stroke: '#ff0055',
                     strokeThickness: 12,
                     align: 'center'
                 }).setOrigin(0.5);
+                
                 this.scoreText = this.add.text(width / 2, 530, '00000', { 
                     fontFamily: 'Roboto Mono, monospace', 
                     fontSize: '140px', 
@@ -590,18 +628,22 @@
                     stroke: '#000',
                     strokeThickness: 10
                 }).setOrigin(0.5);
+                
                 this.add.text(width / 2, 440, 'SCORE', { fontSize: '40px', color: '#ffffff' }).setOrigin(0.5);
+
                 this.timerText = this.add.text(width / 2, 670, '60', { 
                     fontSize: '100px', 
                     color: '#ff0055',
                     stroke: '#000',
                     strokeThickness: 5
                 }).setOrigin(0.5);
+
                 this.comboContainer = this.add.container(width / 2, 800);
                 this.comboText = this.add.text(0, 0, 'COMBO: 0', { fontSize: '60px', color: '#ffcc00' }).setOrigin(0.5);
-                this.multiplierText = this.add.text(0, 80, 'x1', { fontSize: '80px', color: '#00ff00', fontWeight: 'bold' }).setOrigin(0.5);
+                this.multiplierText = this.add.text(0, 80, 'x1', { fontSize: '80px', color: '#00ff00' }).setOrigin(0.5);
                 this.comboContainer.add([this.comboText, this.multiplierText]);
                 this.comboContainer.setAlpha(0);
+                
                 this.titleText.setDepth(DEPTH.UI);
                 this.scoreText.setDepth(DEPTH.UI);
                 this.timerText.setDepth(DEPTH.UI);
@@ -613,6 +655,7 @@
                 const startX = width / 2 - 320;
                 const startY = height / 2 + 100;
                 const spacing = 320;
+
                 for (let row = 0; row < CONFIG.gridSize; row++) {
                     for (let col = 0; col < CONFIG.gridSize; col++) {
                         const x = startX + col * spacing;
@@ -655,18 +698,23 @@
                 if (this.isGameOver) return;
                 if (this.activeNephew) this.activeNephew.destroy();
                 if (this.activeSpotlight) this.activeSpotlight.destroy();
+
                 const hole = Phaser.Utils.Array.GetRandom(this.holes);
                 const typeRoll = Math.random();
                 let type = typeRoll < 0.15 ? 'decoy' : 'normal';
+
                 const spotlight = this.add.graphics();
                 spotlight.fillStyle(0x00ffcc, 1);
                 spotlight.fillCircle(hole.x, hole.y, CONFIG.holeRadius * 1.5);
                 spotlight.setAlpha(0);
                 spotlight.setBlendMode(Phaser.BlendModes.ADD);
                 spotlight.setDepth(DEPTH.SPOTLIGHT);
+                
                 this.tweens.add({ targets: spotlight, alpha: 0.1, duration: 150 });
                 this.activeSpotlight = spotlight;
+
                 sounds.playSpawn();
+
                 const nephew = this.createNephewGraphic(hole.x, hole.y, type);
                 nephew.type = type;
                 nephew.setDepth(DEPTH.NEPHEW);
@@ -675,7 +723,9 @@
                     event.stopPropagation();
                     this.handleHit(nephew, spotlight);
                 });
+
                 this.activeNephew = nephew;
+
                 this.time.delayedCall(CONFIG.displayDuration, () => {
                     if (this.activeNephew === nephew) {
                         this.tweens.add({
@@ -720,6 +770,7 @@
                 this.activeNephew = null;
                 this.activeSpotlight = null;
                 this.cameras.main.shake(100, 0.01);
+
                 if (type === 'decoy') {
                     sounds.playDecoyBoing();
                     this.score = Math.max(0, this.score - 1);
@@ -755,7 +806,7 @@
                 this.resetCombo();
                 this.updateUI();
                 this.showFloatingText(x, y, 'MISS -1', '#888888');
-                this.cameras.main.flash(50, 100, 0, 0, 0.2);
+                this.cameras.main.flash(50, 100, 0, 0, true);
             }
 
             createExplosion(x, y, color) {
@@ -794,7 +845,7 @@
             }
 
             showFloatingText(x, y, text, color, scale = 1) {
-                const txt = this.add.text(x, y, text, { fontSize: '80px', color: color, fontWeight: 'bold', stroke: '#000', strokeThickness: 5 }).setOrigin(0.5).setScale(scale);
+                const txt = this.add.text(x, y, text, { fontSize: '80px', color: color, stroke: '#000', strokeThickness: 5 }).setOrigin(0.5).setScale(scale);
                 txt.setDepth(DEPTH.UI + 1);
                 this.tweens.add({ targets: txt, y: y - 200, alpha: 0, scale: scale * 1.5, duration: 600, onComplete: () => txt.destroy() });
             }
@@ -804,9 +855,9 @@
                 sounds.playGameOver();
                 if (this.activeNephew) this.activeNephew.destroy();
                 if (this.activeSpotlight) this.activeSpotlight.destroy();
-                const highScore = localStorage.getItem('freddie_high_score_arcade') || '0';
-                if (this.score > parseInt(highScore)) localStorage.setItem('freddie_high_score_arcade', this.score.toString());
-                this.scene.start('GameOverScene', { score: this.score, highScore: Math.max(this.score, parseInt(highScore)) });
+                const highScore = parseInt(localStorage.getItem('freya_high_score_arcade') || '0');
+                if (this.score > highScore) localStorage.setItem('freya_high_score_arcade', this.score.toString());
+                this.scene.start('GameOverScene', { score: this.score, highScore: Math.max(this.score, highScore) });
             }
         }
 
@@ -823,21 +874,24 @@
                 this.add.text(width / 2, height / 2 - 150, `FINAL SCORE`, { fontSize: '50px', color: '#aaa' }).setOrigin(0.5);
                 this.add.text(width / 2, height / 2 - 50, `${data.score}`, { fontSize: '120px', color: '#00ffcc' }).setOrigin(0.5);
                 this.add.text(width / 2, height / 2 + 100, `BEST: ${data.highScore}`, { fontSize: '60px', color: '#ffcc00' }).setOrigin(0.5);
+
                 const restartBtn = this.add.container(width / 2, height / 2 + 350);
                 const bg = this.add.rectangle(0, 0, 600, 150, 0x00ffcc).setInteractive();
                 const txt = this.add.text(0, 0, 'PLAY AGAIN', { fontSize: '60px', color: '#000' }).setOrigin(0.5);
                 restartBtn.add([bg, txt]);
+
                 bg.on('pointerdown', () => {
                     sounds.playClick();
                     this.tweens.add({ targets: restartBtn, scale: 0.9, duration: 50, yoyo: true, onComplete: () => this.scene.start('MainScene') });
                 });
+
                 this.time.addEvent({
                     delay: 200,
                     callback: () => {
                         const x = Phaser.Math.Between(0, width);
                         const y = Phaser.Math.Between(0, height);
-                        const star = this.add.star(x, y, 5, 5, 15, 0xffffff);
-                        this.tweens.add({ targets: star, alpha: 0, scale: 2, duration: 500, onComplete: () => star.destroy() });
+                        const dot = this.add.circle(x, y, 15, 0xff0055);
+                        this.tweens.add({ targets: dot, alpha: 0, scale: 2, duration: 500, onComplete: () => dot.destroy() });
                     },
                     loop: true
                 });
@@ -854,10 +908,10 @@
                 autoCenter: Phaser.Scale.CENTER_BOTH
             },
             scene: [TitleScene, MainScene, GameOverScene],
-            backgroundColor: '#0a0a0a'
+            backgroundColor: '#ffff00'
         };
 
-        new Phaser.Game(config);
+        const game = new Phaser.Game(config);
     </script>
 </body>
 </html>
